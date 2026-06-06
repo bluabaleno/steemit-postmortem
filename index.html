@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steemit — A Tokenomics Post-Mortem</title>
+<style>
+  :root{
+    --ink:#1a1814;
+    --ink-soft:#4a463f;
+    --paper:#f7f4ee;
+    --paper-2:#fffdf8;
+    --line:#e2dccf;
+    --accent:#9a3b1b;       /* steem-ish burnt sienna */
+    --accent-soft:#c66a3f;
+    --good:#3f6b4a;
+    --bad:#9a3b1b;
+    --gov:#3a4a73;
+    --chip:#efe9dc;
+    --shadow:rgba(40,30,15,.08);
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype","Palatino",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--serif);font-size:18px;line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px}
+
+  /* ---- Hero ---- */
+  header.hero{
+    background:
+      radial-gradient(1200px 400px at 80% -10%, rgba(198,106,63,.18), transparent 60%),
+      linear-gradient(180deg,#211d17,#2b251c);
+    color:#f2ece0;padding:78px 0 64px;border-bottom:3px solid var(--accent);
+  }
+  .hero .wrap{max-width:820px}
+  .kicker{
+    font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent-soft);margin:0 0 18px;font-weight:600;
+  }
+  h1{
+    font-family:var(--sans);font-weight:800;line-height:1.05;
+    font-size:clamp(34px,6vw,58px);margin:0 0 20px;letter-spacing:-.02em;
+  }
+  .dek{font-size:clamp(18px,2.4vw,22px);color:#cfc6b6;max-width:62ch;margin:0;font-style:italic}
+  .hero-meta{
+    margin-top:34px;display:flex;flex-wrap:wrap;gap:10px 22px;
+    font-family:var(--mono);font-size:12px;color:#a59b89;letter-spacing:.04em;
+  }
+  .hero-meta span{display:inline-flex;align-items:center;gap:7px}
+  .hero-meta b{color:#e9e0cf;font-weight:600}
+
+  /* ---- TOC ---- */
+  nav.toc{
+    position:sticky;top:0;z-index:20;background:rgba(247,244,238,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  }
+  nav.toc .wrap{display:flex;gap:4px;overflow-x:auto;padding:11px 24px;scrollbar-width:none}
+  nav.toc .wrap::-webkit-scrollbar{display:none}
+  nav.toc a{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;letter-spacing:.02em;
+    color:var(--ink-soft);text-decoration:none;white-space:nowrap;
+    padding:6px 12px;border-radius:99px;transition:.15s;
+  }
+  nav.toc a:hover{background:var(--chip);color:var(--accent)}
+
+  /* ---- Sections ---- */
+  section{padding:54px 0 6px}
+  section + section{border-top:1px solid var(--line)}
+  .sec-num{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.18em;font-weight:600}
+  h2{
+    font-family:var(--sans);font-weight:800;font-size:clamp(26px,4vw,36px);
+    line-height:1.1;margin:8px 0 22px;letter-spacing:-.015em;
+  }
+  h3{font-family:var(--sans);font-weight:700;font-size:21px;margin:34px 0 10px;letter-spacing:-.01em}
+  p{margin:0 0 18px}
+  a.ref{color:var(--accent);text-decoration:none;font-family:var(--sans);font-size:11px;
+    font-weight:700;vertical-align:super;line-height:0;padding:0 1px}
+  a.ref:hover{text-decoration:underline}
+  strong{font-weight:700}
+  em.term{font-style:normal;font-family:var(--mono);font-size:.86em;background:var(--chip);
+    padding:1px 6px;border-radius:4px;color:var(--ink)}
+
+  .lead{font-size:21px;line-height:1.6;color:var(--ink)}
+  .lead::first-letter{}
+
+  /* ---- TL;DR box ---- */
+  .tldr{
+    background:var(--paper-2);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:10px;padding:26px 28px;margin:30px 0 8px;box-shadow:0 4px 20px var(--shadow);
+  }
+  .tldr h3{margin:0 0 14px;font-size:16px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
+  .tldr p{margin:0 0 12px;font-size:17px}
+  .tldr p:last-child{margin:0}
+
+  /* ---- Timeline ---- */
+  .timeline{margin:24px 0 10px;position:relative;padding-left:26px}
+  .timeline::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .tl-item{position:relative;margin-bottom:20px}
+  .tl-item::before{content:"";position:absolute;left:-26px;top:7px;width:11px;height:11px;border-radius:50%;
+    background:var(--paper);border:2.5px solid var(--accent-soft)}
+  .tl-item.gov::before{border-color:var(--gov)}
+  .tl-date{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--accent);letter-spacing:.03em}
+  .tl-item.gov .tl-date{color:var(--gov)}
+  .tl-body{font-size:16.5px;line-height:1.5}
+
+  /* ---- Cards / grids ---- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0 10px}
+  .card{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:20px 22px}
+  .card h4{font-family:var(--sans);font-size:16px;margin:0 0 8px;font-weight:700}
+  .card p{font-size:15.5px;line-height:1.5;margin:0;color:var(--ink-soft)}
+  .card .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    font-weight:600;display:inline-block;margin-bottom:9px;padding:2px 8px;border-radius:99px}
+  .tag.good{background:rgba(63,107,74,.12);color:var(--good)}
+  .tag.bad{background:rgba(154,59,27,.12);color:var(--bad)}
+
+  /* ---- Token table ---- */
+  .tbl{width:100%;border-collapse:collapse;margin:22px 0 10px;font-size:15.5px;
+    font-family:var(--sans);background:var(--paper-2);border-radius:10px;overflow:hidden;
+    box-shadow:0 2px 12px var(--shadow)}
+  .tbl th,.tbl td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl th{background:#efe9dc;font-weight:700;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+  .tbl td:first-child{font-weight:700;white-space:nowrap}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl code{font-family:var(--mono);font-size:.88em;background:var(--chip);padding:1px 5px;border-radius:4px}
+
+  /* ---- Curve evolution ---- */
+  .curve{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0 10px}
+  .curve .step{flex:1;min-width:150px;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:10px;padding:16px 18px;position:relative}
+  .curve .step .v{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);margin-bottom:4px}
+  .curve .step .when{font-family:var(--mono);font-size:11px;color:var(--ink-soft);letter-spacing:.04em}
+  .curve .step .what{font-size:14px;line-height:1.4;margin-top:8px;color:var(--ink-soft);font-family:var(--sans)}
+
+  /* ---- Pull quote ---- */
+  blockquote{
+    margin:28px 0;padding:6px 0 6px 26px;border-left:4px solid var(--accent-soft);
+    font-size:21px;line-height:1.5;font-style:italic;color:var(--ink)
+  }
+  blockquote cite{display:block;margin-top:12px;font-size:13.5px;font-style:normal;
+    font-family:var(--mono);color:var(--ink-soft);letter-spacing:.02em}
+
+  /* ---- Lessons ---- */
+  .lesson{display:flex;gap:18px;padding:22px 0;border-bottom:1px solid var(--line)}
+  .lesson:last-child{border-bottom:none}
+  .lesson .n{font-family:var(--sans);font-weight:800;font-size:30px;color:var(--accent-soft);line-height:1;
+    min-width:44px;opacity:.8}
+  .lesson .body h4{font-family:var(--sans);font-size:18px;margin:0 0 6px;font-weight:700}
+  .lesson .body p{margin:0;font-size:16px;color:var(--ink-soft);line-height:1.5}
+  .lesson .body .apply{margin-top:8px;font-size:14px;font-family:var(--sans);color:var(--accent);
+    font-weight:600}
+
+  /* ---- callout ---- */
+  .note{background:#fbf6ec;border:1px dashed var(--accent-soft);border-radius:8px;
+    padding:14px 18px;font-size:14.5px;font-family:var(--sans);color:var(--ink-soft);margin:22px 0;line-height:1.5}
+  .note b{color:var(--accent)}
+
+  /* ---- Sources ---- */
+  section.sources{padding-bottom:60px}
+  ol.srclist{font-family:var(--sans);font-size:13.5px;line-height:1.5;color:var(--ink-soft);
+    padding-left:22px;margin:18px 0 0}
+  ol.srclist li{margin-bottom:9px}
+  ol.srclist a{color:var(--accent);text-decoration:none;word-break:break-word}
+  ol.srclist a:hover{text-decoration:underline}
+  .qual{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    padding:1px 6px;border-radius:99px;margin-left:6px;font-weight:600}
+  .qual.primary{background:rgba(63,107,74,.13);color:var(--good)}
+  .qual.secondary{background:rgba(58,74,115,.12);color:var(--gov)}
+  .qual.academic{background:rgba(154,59,27,.10);color:var(--accent)}
+
+  footer{background:#211d17;color:#a59b89;font-family:var(--mono);font-size:11.5px;
+    text-align:center;padding:30px 24px;letter-spacing:.04em;line-height:1.7}
+  footer b{color:#e9e0cf}
+
+  @media(max-width:640px){
+    body{font-size:17px}
+    .grid{grid-template-columns:1fr}
+    .hero{padding:54px 0 44px}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Crypto Post-Mortem · Tokenomics &amp; Incentive Design</p>
+    <h1>Steemit: The Chain That Paid for Brains</h1>
+    <p class="dek">The first serious attempt to pay for content with a token. It pioneered the creator-economy primitives everyone now reuses — and demonstrated, in public and at scale, every way stake-weighted incentives can eat themselves.</p>
+    <div class="hero-meta">
+      <span><b>Live:</b> Mar 2016 – present (forked Mar 2020)</span>
+      <span><b>Founders:</b> Dan Larimer &amp; Ned Scott</span>
+      <span><b>Lens:</b> tokenomics-first, balanced</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <a href="#summary">TL;DR</a>
+    <a href="#timeline">Timeline</a>
+    <a href="#origins">1 · Origins</a>
+    <a href="#machine">2 · The Machine</a>
+    <a href="#worked">3 · What Worked</a>
+    <a href="#failed">4 · Failure Modes</a>
+    <a href="#crisis">5 · The Takeover</a>
+    <a href="#aftermath">6 · Aftermath</a>
+    <a href="#lessons">7 · Lessons</a>
+    <a href="#sources">Sources</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ============ TL;DR ============ -->
+<section id="summary" style="border-top:none">
+  <span class="sec-num">EXECUTIVE SUMMARY</span>
+  <h2>The whole story in five sentences</h2>
+  <div class="tldr">
+    <h3>TL;DR</h3>
+    <p>Steem (blockchain live March 2016; the <strong>Steemit</strong> front-end on July 4, 2016) tried to monetize social media at the protocol layer via <strong>"Proof-of-Brain"</strong>: a rewards pool funded by inflation, paid out to content and curators by stake-weighted community voting.<a class="ref" href="#s2">2</a></p>
+    <p>It genuinely <strong>pioneered</strong> the reusable building blocks of on-chain creator economies — a rewards pool, community curation, vesting stake (Steem Power), a stable-token (SBD), and a parameterized author/curator split — and in the early days it really did put crypto in creators' wallets.<a class="ref" href="#s13">13</a></p>
+    <p>But the core rule was explicit — <em class="term">"the only way to increase influence is to increase stake"</em> — and a superlinear reward curve amplified it, producing exactly the <strong>plutocracy</strong> critics predicted: whale-dominated voting, self-voting rings, and an industrial <strong>bid-bot economy</strong> that captured the reward pool.<a class="ref" href="#s4">4</a><a class="ref" href="#s10">10</a></p>
+    <p>Steemit Inc spent three years patching the economics (linear curve in 2017; a 50/50 split, convergent-linear curve, and a proposal DAO in 2019) — fixes that shifted behavior more than they cured it.<a class="ref" href="#s8">8</a></p>
+    <p>The defining failure was <strong>governance</strong>: in 2020 Justin Sun's Tron bought Steemit Inc and its founder stake, the community soft-forked to freeze it, Sun voted out the witnesses using <strong>customer funds borrowed from exchanges</strong>, and the community escaped by hard-forking into <strong>Hive</strong> — the canonical real-world proof that coin-voting is capturable.<a class="ref" href="#s1">1</a><a class="ref" href="#s16">16</a></p>
+  </div>
+</section>
+
+<!-- ============ TIMELINE ============ -->
+<section id="timeline">
+  <span class="sec-num">AT A GLANCE</span>
+  <h2>Timeline</h2>
+  <div class="timeline">
+    <div class="tl-item"><div class="tl-date">Mar 24, 2016</div><div class="tl-body">Steem blockchain goes live. DPoS chain, 21 elected "witnesses," fast and feeless transactions.<a class="ref" href="#s1">1</a></div></div>
+    <div class="tl-item"><div class="tl-date">Jul 4, 2016</div><div class="tl-body">Steemit.com launches. Reward curve already quietly changed from <code>n³</code> to <code>n²</code> before the first payouts.<a class="ref" href="#s6">6</a></div></div>
+    <div class="tl-item"><div class="tl-date">Dec 2016</div><div class="tl-body">Inflation reset to a predictable 9.5%/yr, decaying toward a 0.95% floor over ~20 years. Split 75% rewards pool / 15% stakers / 10% witnesses.<a class="ref" href="#s3">3</a></div></div>
+    <div class="tl-item"><div class="tl-date">Mar 2017</div><div class="tl-body">Co-founder/CTO Dan Larimer departs to build EOS.<a class="ref" href="#s1">1</a></div></div>
+    <div class="tl-item"><div class="tl-date">Jun 2017 · HF19</div><div class="tl-body">"Equality" hardfork: reward curve switched from superlinear <code>n²</code> to <strong>linear</strong> to blunt the rich-get-richer dynamic.<a class="ref" href="#s7">7</a></div></div>
+    <div class="tl-item"><div class="tl-date">2017–18</div><div class="tl-body">Bull-run peak. SBD trades wildly <em>above</em> its $1 target; bid-bots become a thriving cottage industry on top of the reward pool. <span class="note" style="display:inline;padding:0;border:none;background:none">(SBD peg detail — estimate)</span></div></div>
+    <div class="tl-item"><div class="tl-date">May 2019</div><div class="tl-body">Steemit Inc publishes "Improving the Economics of Steem," naming self-voting and bid-bots as threats to proof-of-brain.<a class="ref" href="#s8">8</a></div></div>
+    <div class="tl-item"><div class="tl-date">Aug 27, 2019 · HF21</div><div class="tl-body">Big economic rework: content rewards 75%→65% with 10% to a new proposal DAO; curation 25%→50%; "convergent linear" <code>n²/(n+1)</code> curve.<a class="ref" href="#s8b">9</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">Feb 14, 2020</div><div class="tl-body">Justin Sun's Tron Foundation acquires Steemit Inc — and its large "ninja-mined" founder stake (est. ~20% of supply).<a class="ref" href="#s14">14</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">Feb 24, 2020</div><div class="tl-body">Witnesses deploy soft fork <strong>0.22.2</strong> to freeze the Steemit stake's voting power.<a class="ref" href="#s15">15</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">Mar 2, 2020</div><div class="tl-body">Sun mobilizes customer STEEM staked on Binance, Huobi &amp; Poloniex to vote out the top-20 witnesses and seize control. Vitalik Buterin: <em>"the first big instance of a de facto bribe attack on coin voting."</em><a class="ref" href="#s15">15</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">Mar 20, 2020</div><div class="tl-body">Community hard-forks into <strong>Hive</strong>, airdropping the new token to all holders <em>except</em> Sun's stake and accounts that backed the takeover.<a class="ref" href="#s16">16</a></div></div>
+  </div>
+</section>
+
+<!-- ============ ORIGINS ============ -->
+<section id="origins">
+  <span class="sec-num">SECTION 1</span>
+  <h2>Origins &amp; design intent</h2>
+  <p class="lead">Steem set out to answer a question Web2 never solved fairly: <em>if a platform's value is created by its users, why do users capture none of it?</em> Facebook and Reddit monetized attention; the people producing the content and doing the moderation got nothing. Steem's bet was that you could pay them — directly, in a token, at the protocol layer.</p>
+
+  <p>Launched in 2016 by <strong>Dan Larimer</strong> (already known for BitShares, later EOS) and <strong>Ned Scott</strong>, Steem ran as a <strong>Delegated Proof-of-Stake</strong> blockchain: token holders elect 21 "witnesses" to produce blocks, which is what made transactions fast and feeless — a prerequisite if every upvote, comment, and post is going to be an on-chain operation.<a class="ref" href="#s1">1</a></p>
+
+  <p>The headline idea was <strong>"Proof-of-Brain."</strong> The name is a deliberate pun on Proof-of-Work: instead of burning electricity to distribute new tokens, Steem would distribute them to whoever the crowd judged to have done the most valuable <em>human</em> work — writing and curating. The bluepaper describes it as two mechanisms fused together: a <em class="term">rewards pool</em> of newly minted tokens "dedicated to incentivizing content creation and curation," and "a voting system that leverages the wisdom of the crowd to assess the value of content."<a class="ref" href="#s2">2</a></p>
+
+  <blockquote>
+    Steem operates on the basis of one-STEEM, one-vote… individuals who have contributed the most, as measured by their account balance, have the most influence… The only way for users to increase their influence is to increase their stake.
+    <cite>— Steem Bluepaper. This sentence is the whole post-mortem in miniature.<a class="ref" href="#s4">4</a></cite>
+  </blockquote>
+
+  <p>That design choice — votes weighted by money, not by people — was not an accident or an oversight. It was the explicit, load-bearing premise. Everything that worked and everything that failed flows from it.</p>
+</section>
+
+<!-- ============ THE MACHINE ============ -->
+<section id="machine">
+  <span class="sec-num">SECTION 2 · CORE</span>
+  <h2>The tokenomics machine</h2>
+  <p class="lead">Steem's economy ran on three tokens, one inflation schedule, and one reward formula that was rewritten three times. Understanding these four pieces is understanding the whole system.</p>
+
+  <h3>The three-token model</h3>
+  <p>Most of the cleverness — and most of the confusion — lived in splitting "the token" into three instruments with different jobs:</p>
+  <table class="tbl">
+    <thead><tr><th>Token</th><th>Role</th><th>Key property</th></tr></thead>
+    <tbody>
+      <tr><td>STEEM</td><td>The liquid base asset. Tradeable, volatile, what you bought on exchanges.</td><td>Liquid; inflationary. Holding it raw meant getting diluted.</td></tr>
+      <tr><td>Steem Power (SP)</td><td>STEEM that's been "powered up" / vested. <strong>This is what votes.</strong> Voting influence ∝ SP.</td><td>Illiquid — a 13-week linear power-down to exit (originally a punishing <strong>2-year</strong> vest). Designed to align voters with the long term.<a class="ref" href="#s4">4</a></td></tr>
+      <tr><td>Steem&nbsp;Dollars (SBD)</td><td>A stable-token "backed" by STEEM, targeting ~$1, meant to give creators a non-volatile payout option.</td><td>A debt instrument, convertible to ~$1 of STEEM. The peg held loosely at best. <span style="color:var(--accent)">(mechanics: estimate)</span></td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>Honest caveat:</b> the deep research could not verify the exact SBD peg/conversion mechanics or the magnitude of its depeg episodes from primary sources. The general record is that SBD swung <em>far above</em> $1 during the 2017–18 bull run (briefly into the multiples of dollars) and below it later — i.e. it depegged in both directions — but treat specific SBD figures here as unverified.</div>
+
+  <h3>The inflation engine</h3>
+  <p>From December 2016 the supply grew at a predictable <strong>9.5% per year</strong>, decreasing by 0.01% roughly every 8–9 days toward a <strong>0.95% floor</strong> reached after ~20.5 years. Every newly minted token was split three ways:<a class="ref" href="#s3">3</a></p>
+  <div class="curve">
+    <div class="step"><div class="v">75%</div><div class="when">→ rewards pool</div><div class="what">Paid out to authors &amp; curators by vote weight. The prize everyone competed for.</div></div>
+    <div class="step"><div class="v">15%</div><div class="when">→ SP holders</div><div class="what">An interest-like yield to vested stakers, partly offsetting dilution.</div></div>
+    <div class="step"><div class="v">10%</div><div class="when">→ witnesses</div><div class="what">Block producers securing the DPoS chain.</div></div>
+  </div>
+  <p>The structural tension is visible immediately: if you held liquid STEEM and did nothing, inflation diluted you. The system <em>pushed</em> everyone to either power up and vote, or sell. Passive holding was punished by design.</p>
+
+  <h3>The reward curve — rewritten three times</h3>
+  <p>The single most consequential parameter was the shape of the function mapping vote weight to payout. Steem changed it repeatedly, and each change is a confession about the previous one:</p>
+  <div class="curve">
+    <div class="step"><div class="v">n³ → n²</div><div class="when">launch → Jul 2016</div><div class="what">Superlinear "anti-sybil" curve. Rewarded <em>consolidating</em> stake; explicitly discouraged splitting into small accounts.<a class="ref" href="#s6">6</a></div></div>
+    <div class="step"><div class="v">linear (n)</div><div class="when">Jun 2017 · HF19</div><div class="what">"Equality." One Steem of vote = the same payout regardless of who casts it. A direct admission that <code>n²</code> was "not fair."<a class="ref" href="#s7">7</a></div></div>
+    <div class="step"><div class="v">n²/(n+1)</div><div class="when">Aug 2019 · HF21</div><div class="what">"Convergent linear" — superlinear for small votes, linear for large. An attempt to punish dust/spam without re-enabling whale dominance.<a class="ref" href="#s8b">9</a></div></div>
+  </div>
+  <p>An engineer on the project put the <code>n²</code> problem bluntly: it was a "rich get richer" curve, and "certainly this is not fair. Steemit and the witnesses agree, which is why we changed the rewards curve to linear."<a class="ref" href="#s7">7</a> The whiplash between curves is itself a finding: the team kept discovering that any curve, given stake-weighted voting underneath it, gets gamed — the curve only changes <em>how</em>.</p>
+
+  <h3>The author / curator split</h3>
+  <p>Within each post, the reward was divided between the author and the people who upvoted it ("curators"). This split was a tunable protocol parameter (<em class="term">percent_curation_rewards</em>): curators collectively took a fixed slice, the author got the rest, with a ~30-minute reverse-auction redirecting some curation reward back to early-vs-late voters.<a class="ref" href="#s5">5</a> The baseline started at <strong>75% author / 25% curator</strong>.</p>
+  <p>In 2019, HF21 <strong>doubled curation to 50%</strong>. The stated logic is revealing: <em>"the more rewards are distributed to curators the less incentive there is to self-vote."</em><a class="ref" href="#s8">8</a> They were no longer designing for an ideal — they were re-tuning the dial to make the dominant abuse slightly less profitable.</p>
+</section>
+
+<!-- ============ WHAT WORKED ============ -->
+<section id="worked">
+  <span class="sec-num">SECTION 3</span>
+  <h2>What genuinely worked</h2>
+  <p class="lead">A post-mortem that only catalogs failure misreads the thing. Steem was a real and influential experiment, and several of its bets paid off — or at least proved the concept was buildable.</p>
+  <div class="grid">
+    <div class="card"><span class="tag good">Pioneered</span><h4>Reusable creator-economy primitives</h4><p>Rewards pool + community curation + vesting stake + a stable payout token + a parameterized author/curator split. Steem invented this kit. It later generalized into <strong>Smart Media Tokens</strong> — any project could carry built-in "Proof-of-Brain."<a class="ref" href="#s13">13</a></p></div>
+    <div class="card"><span class="tag good">Real money</span><h4>Creators actually got paid</h4><p>In the early days the payouts were real and sometimes large. For a window, "post and get crypto" was not a slogan — it happened, and it pulled in a genuine community of writers, photographers and developers.</p></div>
+    <div class="card"><span class="tag good">Live ecosystem</span><h4>A working dApp layer</h4><p>It wasn't a single site. <strong>Splinterlands</strong> (a blockchain card game that became one of crypto's most-used dApps), <strong>DTube</strong> (decentralized video), Busy, eSteem and others built on the same social graph and token.<a class="ref" href="#s17">17</a><a class="ref" href="#s18">18</a></p></div>
+    <div class="card"><span class="tag good">Infra</span><h4>Fast, feeless UX</h4><p>DPoS gave 3-second blocks and no per-action fees — non-negotiable for social media, where charging gas per upvote would be fatal. The chain handled hundreds of millions of operations.<a class="ref" href="#s9">9</a></p></div>
+    <div class="card"><span class="tag good">Studied</span><h4>It became a research template</h4><p>Steem is now a canonical case study — an HBS case, multiple peer-reviewed papers, and an 8-step "token economy design" framework all use it. Its failures are legible <em>because</em> everything happened on a public ledger.<a class="ref" href="#s12">12</a><a class="ref" href="#s19">19</a></p></div>
+    <div class="card"><span class="tag good">Resilience</span><h4>The community could exit</h4><p>The 2020 Hive fork — escaping a hostile acquirer by forking the chain and airdropping a clean token — is, perversely, a success story: proof that an aligned community can route around a captured protocol.<a class="ref" href="#s16">16</a></p></div>
+  </div>
+</section>
+
+<!-- ============ FAILURE MODES ============ -->
+<section id="failed">
+  <span class="sec-num">SECTION 4</span>
+  <h2>Failure modes</h2>
+  <p class="lead">Every failure below is downstream of one decision: votes are weighted by money, and money buys a share of a fixed reward pool. That turns "curation" into "yield farming," and the rest follows mechanically.</p>
+
+  <h3>Plutocracy, measured</h3>
+  <p>This isn't a vibe — it's in the data. A peer-reviewed study of <strong>539 million operations by 1.12 million users</strong> (2016–2018) concluded the "actual level of decentralization in Steemit is far lower than the ideal," and that DPoS "may not be a desirable approach for establishing a highly decentralized social media platform."<a class="ref" href="#s9">9</a> Stake concentration meant a small number of whales effectively decided what got paid.</p>
+
+  <h3>Curation became a money game, not a taste game</h3>
+  <p>A 2022 PLOS ONE study found that high-stake central users ("hubs") <em>preferred voting to creating</em> — because once you hold enough Steem Power, curating is simply more profitable than writing. The result: rewards showed "an absence of correlation with the creation factor." The platform paid for stake, not for content.<a class="ref" href="#s11">11</a></p>
+  <div class="note"><b>Precision note:</b> the "near-zero correlation between content creation and rewards" finding is firmest for top-decile users; one verifier flagged that generalizing it to <em>all</em> users slightly overreaches. The direction is solid; the universality is not.</div>
+
+  <h3>The bid-bot economy</h3>
+  <p>Because votes were money and money was a fixed pool, a market formed to <em>buy votes</em>. You'd send STEEM/SBD to a "bid-bot," which upvoted your post in proportion — often netting the buyer more in rewards than they paid in. The same 539M-operation study found <strong>more than 16% of transfers went to curators suspected to be bots</strong>, with an identifiable supply network behind them.<a class="ref" href="#s10">10</a> Self-voting and "circle-jerk" voting rings did the same thing without the marketplace.</p>
+
+  <blockquote>
+    These practices undermine one of the core unique value propositions of the platform: proof-of-brain.
+    <cite>— Steemit Inc, "Improving the Economics of Steem" (2019). The team naming its own death spiral.<a class="ref" href="#s8">8</a></cite>
+  </blockquote>
+
+  <h3>The doom loop</h3>
+  <div class="grid">
+    <div class="card"><span class="tag bad">Quality</span><h4>Content farming</h4><p>When payout tracks stake and vote-buying rather than merit, low-effort content optimized for upvote-trading crowds out the good stuff. Discovery degrades.</p></div>
+    <div class="card"><span class="tag bad">Retention</span><h4>Ghost-town dynamics</h4><p>New users with no stake had near-zero influence and near-zero earnings. The promise ("get paid to post") was structurally false for the people it was marketed to, so they left.</p></div>
+    <div class="card"><span class="tag bad">Holders</span><h4>Inflation dilution</h4><p>~9.5% annual inflation meant passive holders bled value continuously, forcing everyone into the vote-game or the exit — accelerating both gaming and sell pressure.<a class="ref" href="#s3">3</a></p></div>
+    <div class="card"><span class="tag bad">Peg</span><h4>SBD instability</h4><p>The "stable" dollar token didn't stay stable, undercutting its purpose as a safe payout. <span style="color:var(--accent)">(magnitude unverified)</span></p></div>
+  </div>
+</section>
+
+<!-- ============ THE CRISIS ============ -->
+<section id="crisis">
+  <span class="sec-num">SECTION 5 · GOVERNANCE</span>
+  <h2>The takeover that broke it open</h2>
+  <p class="lead">All of the above was slow decay. What made Steem the textbook case in crypto governance was a fast, public, and almost theatrical demonstration that stake-weighted voting can be bought outright.</p>
+
+  <p>The latent flaw was the <strong>"ninja-mined" founder stake.</strong> Steem's early mining had concentrated a very large block of tokens — commonly cited at <strong>~20% of supply</strong> — with the founders and Steemit Inc. For years it sat as an implicit promise <em>not</em> to be used to dominate governance. That promise was only as good as whoever owned it.</p>
+
+  <p>In <strong>February 2020, Justin Sun's Tron Foundation acquired Steemit Inc</strong> — and with it, that stake. HBS's case notes he thereby gained "potentially outsized influence over blockchain governance."<a class="ref" href="#s14">14</a> The community read it as an existential threat and responded fast:</p>
+
+  <div class="timeline">
+    <div class="tl-item gov"><div class="tl-date">The freeze</div><div class="tl-body"><strong>Soft fork 0.22.2</strong> — the existing witnesses moved to neutralize the Steemit stake's voting power, parking it.<a class="ref" href="#s15">15</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">The counter</div><div class="tl-body">Sun called in favors. <strong>Binance, Huobi and Poloniex</strong> staked their <em>customers'</em> deposited STEEM and voted with it — enough to evict the entire top-20 witness set and install Sun-aligned ones. Using user funds for governance was the scandal within the scandal.<a class="ref" href="#s15">15</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">The verdict</div><div class="tl-body">Vitalik Buterin labeled it <em>"the first big instance of a de facto bribe attack on coin voting"</em> — instantly a reference point in every later DAO-governance debate.<a class="ref" href="#s15">15</a></div></div>
+    <div class="tl-item gov"><div class="tl-date">The exit</div><div class="tl-body"><strong>Hive</strong> — a hard fork cloning the chain and state, airdropping HIVE to every holder <em>except</em> Sun's stake and the accounts that backed him. The community took the social graph, the dApps, and the culture; Sun kept the brand and an emptied chain.<a class="ref" href="#s16">16</a></div></div>
+  </div>
+
+  <p>Two of the three exchanges (notably Binance) reportedly backed out once users realized their deposits had been weaponized — but the point was already made. <strong>Coin-voting is capturable the moment a large liquid stake exists and custodians can be persuaded to point it somewhere.</strong></p>
+</section>
+
+<!-- ============ AFTERMATH ============ -->
+<section id="aftermath">
+  <span class="sec-num">SECTION 6</span>
+  <h2>Aftermath &amp; verdict</h2>
+  <p>The March 2020 fork cleaved the world in two. <strong>Hive</strong> inherited the active community, most of the dApps (Splinterlands migrated, DTube went multi-chain), and the moral high ground. <strong>Steem</strong> retained Justin Sun, the Steemit brand, and a chain the original community had largely abandoned. Both still exist.</p>
+  <div class="note"><b>Current-state caveat:</b> the research did not pull verified 2026 figures for relative activity, token values, or surviving-dApp metrics on Hive vs Steem. Treat the "who's winning now" question as open — the verified record runs solidly through the 2020 split, not past it.</div>
+
+  <p><strong>The verdict.</strong> Steem was simultaneously a success and a failure, and the two are inseparable. It <em>succeeded</em> at proving you can monetize social media at the protocol layer, build a real dApp ecosystem on a social token, and even let a community escape a hostile takeover by forking. It <em>failed</em> at the only thing that ultimately mattered: designing incentives where rewarding stake and rewarding merit point in the same direction. They never did, and no amount of curve-tuning could make money-weighted voting behave like taste-weighted voting.</p>
+</section>
+
+<!-- ============ LESSONS ============ -->
+<section id="lessons">
+  <span class="sec-num">SECTION 7</span>
+  <h2>Transferable lessons</h2>
+  <p class="lead">The reason this post-mortem is worth writing in 2026: every one of these failure modes recurs in points programs, creator rev-shares, social tokens, and DAO governance. Steem ran the experiment in public so the rest of us don't have to.</p>
+
+  <div class="lesson">
+    <div class="n">01</div>
+    <div class="body"><h4>If you weight rewards by stake, you are building a yield product, not a meritocracy</h4>
+    <p>"Curation" weighted by money is just farming with extra steps. Participants optimize for the payout function, not your stated goal. Steem said it was paying for brains; it was paying for stake, and the data proved it.</p>
+    <p class="apply">Apply: design the reward function as if every participant is an adversary maximizing it — because they are.</p></div>
+  </div>
+
+  <div class="lesson">
+    <div class="n">02</div>
+    <div class="body"><h4>A fixed reward pool is an attack surface</h4>
+    <p>The moment rewards come from a shared, gameable pool, a secondary market to extract from it (bid-bots, vote rings, sybil farms) is not a risk — it's an inevitability. &gt;16% of transfers went to suspected bots.</p>
+    <p class="apply">Apply: in any points/rev-share program, model the extraction market <em>before</em> launch and assume it will be industrialized.</p></div>
+  </div>
+
+  <div class="lesson">
+    <div class="n">03</div>
+    <div class="body"><h4>You cannot patch a structural flaw with parameter tweaks</h4>
+    <p>Three reward curves, a doubled curation split, a DAO — each was a real attempt, each shifted behavior without curing it, because the disease (money-weighted voting) was upstream of every dial they could turn.</p>
+    <p class="apply">Apply: when you find yourself re-tuning the same parameter repeatedly, the bug is in the model, not the constant.</p></div>
+  </div>
+
+  <div class="lesson">
+    <div class="n">04</div>
+    <div class="body"><h4>Coin-voting governance is capturable — custody is the back door</h4>
+    <p>Sun didn't need to <em>buy</em> a majority; he borrowed voting power from exchanges holding customer funds. Any system where a large liquid stake exists and a custodian can mobilize it is one phone call from capture.</p>
+    <p class="apply">Apply: for any on-chain vote, ask "what happens if an exchange votes its users' deposits?" If the answer is catastrophic, redesign. Relevant to any prediction-market or token system contemplating stake-weighted governance.</p></div>
+  </div>
+
+  <div class="lesson">
+    <div class="n">05</div>
+    <div class="body"><h4>A concentrated founder stake is a time bomb on a long fuse</h4>
+    <p>The ninja-mined stake sat harmlessly for years as a gentleman's agreement — until it was sold to someone who hadn't agreed. Allocations outlive intentions.</p>
+    <p class="apply">Apply: treat any large pre-mine/treasury as if it will eventually be held by your worst-case adversary, because ownership transfers and norms don't.</p></div>
+  </div>
+
+  <div class="lesson">
+    <div class="n">06</div>
+    <div class="body"><h4>Punishing passive holding forces everyone into the casino</h4>
+    <p>~9.5% inflation meant doing nothing lost you money, pushing every holder into either gaming the pool or selling. High inflation aimed at "engagement" can manufacture both the abuse and the sell pressure that kill you.</p>
+    <p class="apply">Apply: align the no-effort baseline with neutrality. If inertia is punished, you've conscripted your whole userbase into adversarial behavior.</p></div>
+  </div>
+
+  <div class="lesson">
+    <div class="n">07</div>
+    <div class="body"><h4>The exit valve is a feature — design for forkability and clean airdrops</h4>
+    <p>Hive worked because state was forkable and the community could airdrop a clean token that excluded the bad actor. The credible threat of exit is itself a governance check.</p>
+    <p class="apply">Apply: a community that can credibly leave has leverage a captive one never will. Build the door even if you hope it's never used.</p></div>
+  </div>
+</section>
+
+<!-- ============ SOURCES ============ -->
+<section id="sources" class="sources">
+  <span class="sec-num">PROVENANCE</span>
+  <h2>Sources &amp; confidence</h2>
+  <p style="font-size:15.5px;color:var(--ink-soft);font-family:var(--sans)">Compiled via a fan-out deep-research pass: 27 sources fetched, 111 claims extracted, 25 adversarially verified (3-vote, needs 2/3 to confirm), 23 confirmed. Hard claims below are anchored to primary docs, four peer-reviewed papers, an HBS case, and contemporaneous reporting. Items marked "estimate/unverified" in the body did not clear verification with adequate primary sourcing — chiefly SBD peg specifics, exact Gini figures, named dApp metrics, and post-2020 current state.</p>
+  <ol class="srclist">
+    <li id="s1"><a href="https://www.hbs.edu/faculty/Pages/item.aspx?num=61580">Harvard Business School — Steem/Hive governance case study</a><span class="qual primary">primary/case</span></li>
+    <li id="s2"><a href="https://steem.com/steem-bluepaper.pdf">Steem Bluepaper — "Proof-of-Brain," rewards pool, curation</a><span class="qual primary">primary</span></li>
+    <li id="s3"><a href="https://steem.com/steem-bluepaper.pdf">Steem Bluepaper — inflation schedule &amp; 75/15/10 split</a><span class="qual primary">primary</span></li>
+    <li id="s4"><a href="https://steem.com/steem-bluepaper.pdf">Steem Bluepaper — "one-STEEM, one-vote"; Steem Power vesting</a><span class="qual primary">primary</span></li>
+    <li id="s5"><a href="https://smt.steem.com/">Smart Media Tokens whitepaper — author/curator split, reward fund</a><span class="qual primary">primary</span></li>
+    <li id="s6"><a href="https://steemit.com/steem/@vandeberg/reward-curve-deep-dive">@vandeberg (Steemit engineer) — "Reward Curve Deep Dive" (n³→n²→linear)</a><span class="qual primary">primary</span></li>
+    <li id="s7"><a href="https://steemit.com/steem/@vandeberg/reward-curve-deep-dive">@vandeberg — HF19 linear-curve change ("certainly this is not fair")</a><span class="qual primary">primary</span></li>
+    <li id="s8"><a href="https://hive.blog/steem/@steemitblog/improving-the-economics-of-steem-a-community-proposal">Steemit Inc — "Improving the Economics of Steem" (self-vote/bid-bot diagnosis)</a><span class="qual primary">primary</span></li>
+    <li id="s8b"><a href="https://github.com/steemit/steem/releases/tag/v0.21.0">GitHub — Steem v0.21.0 (HF21) release notes</a><span class="qual primary">primary</span></li>
+    <li id="s9"><a href="https://arxiv.org/abs/1904.07310">Li &amp; Palanisamy, WebSci 2019 — decentralization far below ideal (539M ops)</a><span class="qual academic">peer-reviewed</span></li>
+    <li id="s10"><a href="https://arxiv.org/abs/1904.07310">Li &amp; Palanisamy — &gt;16% of transfers to suspected curation bots</a><span class="qual academic">peer-reviewed</span></li>
+    <li id="s11"><a href="https://journals.plos.org/plosone/article?id=10.1371%2Fjournal.pone.0267612">Ba, Zignani &amp; Gaito, PLOS ONE 2022 — hubs prefer voting; reward/creation decoupled</a><span class="qual academic">peer-reviewed</span></li>
+    <li id="s12"><a href="https://knightcolumbia.org/blog/mapping-social-media-crypto-logic-platforms-and-the-cautionary-tale-of-steemit">Knight First Amendment Institute — "the cautionary tale of Steemit"</a><span class="qual secondary">retrospective</span></li>
+    <li id="s13"><a href="https://smt.steem.com/">SMT whitepaper — generalizing Proof-of-Brain into reusable social tokens</a><span class="qual primary">primary</span></li>
+    <li id="s14"><a href="https://www.coindesk.com/tech/2020/02/24/justin-sun-bought-steemit-steem-moved-to-limit-his-power">CoinDesk (Feb 24 2020) — Sun buys Steemit; community moves to limit him</a><span class="qual secondary">contemporaneous</span></li>
+    <li id="s15"><a href="https://www.theblock.co/post/57508/tron-steem-takeover-crypto-exchanges-governance-reversal-soft-fork-blockchain">The Block — Tron/Steem takeover via exchange-staked customer funds</a><span class="qual secondary">contemporaneous</span></li>
+    <li id="s16"><a href="https://www.coindesk.com/markets/2020/03/18/steem-community-plans-hard-fork-to-fight-justin-suns-takeover">CoinDesk (Mar 2020) — Hive hard fork, airdrop excluding Sun's stake</a><span class="qual secondary">contemporaneous</span></li>
+    <li id="s17"><a href="https://iq.wiki/wiki/splinterlands">IQ.wiki — Splinterlands (Steem Monsters) overview</a><span class="qual secondary">reference</span></li>
+    <li id="s18"><a href="https://dappradar.com/blog/dtube-video-social-dapp-hive-steem-avalon">DappRadar — DTube on Steem/Hive</a><span class="qual secondary">reference</span></li>
+    <li id="s19"><a href="https://www.mdpi.com/2071-1050/11/1/167/pdf">Kim &amp; Chung, Sustainability 2019 — 8-step token-economy design framework (Steemit case)</a><span class="qual academic">peer-reviewed</span></li>
+  </ol>
+</section>
+
+</main>
+
+<footer>
+  Steemit / Steem — tokenomics post-mortem · balanced read · tokenomics-first lens<br>
+  Built from a verified deep-research pass · <b>2026-06-06</b> · figures marked "estimate" are unverified by primary source
+</footer>
+
+</body>
+</html>
