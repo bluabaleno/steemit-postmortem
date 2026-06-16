@@ -205,11 +205,12 @@
     <a href="#timeline">Timeline</a>
     <a href="#origins">1 · Origins</a>
     <a href="#machine">2 · The Machine</a>
-    <a href="#worked">3 · What Worked</a>
-    <a href="#failed">4 · Failure Modes</a>
-    <a href="#crisis">5 · The Takeover</a>
-    <a href="#aftermath">6 · Aftermath</a>
-    <a href="#lessons">7 · Lessons</a>
+    <a href="#infra">3 · Infra</a>
+    <a href="#worked">4 · What Worked</a>
+    <a href="#failed">5 · Failure Modes</a>
+    <a href="#crisis">6 · The Takeover</a>
+    <a href="#aftermath">7 · Aftermath</a>
+    <a href="#lessons">8 · Lessons</a>
     <a href="#sources">Sources</a>
   </div>
 </nav>
@@ -309,9 +310,66 @@
   <p>In 2019, HF21 <strong>doubled curation to 50%</strong>. The stated logic is revealing: <em>"the more rewards are distributed to curators the less incentive there is to self-vote."</em><a class="ref" href="#s8">8</a> They were no longer designing for an ideal — they were re-tuning the dial to make the dominant abuse slightly less profitable.</p>
 </section>
 
+<!-- ============ INFRASTRUCTURE ============ -->
+<section id="infra">
+  <span class="sec-num">SECTION 3 · UNDER THE HOOD</span>
+  <h2>Infrastructure: storage, latency &amp; the centralization underneath</h2>
+  <p class="lead">A social network where every upvote is a blockchain write has two brutal engineering problems: <em>where do you put the content</em>, and <em>how do you make the feed fast</em>. Steem's answers to both were genuinely clever — and both quietly leaned on centralized infrastructure, which is the same vulnerability the governance crisis later exploited, seen from below.</p>
+
+  <h3>Where content lived</h3>
+  <p>Steem made an unusual call: it stored the <strong>actual text</strong> of every post and comment <em>on-chain</em>, inside the <em class="term">comment</em> operation — not a hash, not a pointer, the full body.<a class="ref" href="#s24">24</a> Media was pushed off-chain.</p>
+  <table class="tbl">
+    <thead><tr><th>Content</th><th>Where it lived</th><th>Implication</th></tr></thead>
+    <tbody>
+      <tr><td>Post &amp; comment text</td><td><strong>On-chain</strong>, in the <code>comment</code> op (title, body, <code>json_metadata</code>)</td><td>Permanent, immutable, replicated on every full node. No true delete.</td></tr>
+      <tr><td>Images</td><td><strong>Off-chain CDN</strong> — Steemit ran <code>steemitimages.com</code> (live ~Feb 2017)</td><td>One company hosting the media. Centralization vector.</td></tr>
+      <tr><td>Video (DTube)</td><td><strong>IPFS</strong> (base chain stored only the reference)</td><td>The dApp layer chased decentralized storage; the core chain didn't.</td></tr>
+    </tbody>
+  </table>
+  <p>On-chain text made posts censorship-resistant and permanent — but also un-deletable (a right-to-be-forgotten problem) and heavy: a full node carrying all content state was expensive to run, so most dApps just pointed at Steemit Inc's public nodes. The "decentralized" network had a centralized infrastructure spine.</p>
+
+  <h3>Who paid to store it — stake-gated writes</h3>
+  <p>There were <strong>no transaction fees</strong>, so two mechanisms stopped the free, permanent storage from being spammed:</p>
+  <div class="grid">
+    <div class="card"><span class="tag good">Supply side</span><h4>Witnesses are paid to persist it</h4><p>Block producers replicate and store the chain, funded by the <strong>10% of inflation</strong> routed to witnesses. The storers are paid by the protocol, not per-write fees.<a class="ref" href="#s20">20</a></p></div>
+    <div class="card"><span class="tag bad">Demand side</span><h4>Writing is gated by stake</h4><p>You couldn't pay per post — instead your <em>right to write</em> was rationed by Steem Power. More SP = more capacity to write to permanent storage. No stake, no posting.</p></div>
+  </div>
+  <p>The gating mechanism evolved. Originally a "bandwidth" allowance proportional to SP; <strong>HF20 "Velocity" (Sept 2018)</strong> replaced it with <strong>Resource Credits (RCs)</strong> — non-transferable, mana-like credits granted by SP, regenerating over time and consumed per operation (a post costs more than a vote).<a class="ref" href="#s23">23</a></p>
+  <div class="note"><b>The onboarding trap — ties straight to the retention problem:</b> a brand-new account with zero SP had no credits and <em>literally could not post</em>. Early on, Steemit Inc had to <em>delegate</em> SP to bootstrap new accounts; HF20 shifted this to RC-based "claimed account" creation. Either way, the "anyone can earn by posting" pitch hit a "you need stake before you can post" wall at step one — and HF20's launch infamously froze many low-SP users out of posting for days while RC allocations were recalibrated.</div>
+
+  <h3>How they handled latency</h3>
+  <p>"Latency" was really two problems with two different architectures:</p>
+
+  <h4 style="font-family:var(--sans);font-size:17px;margin:22px 0 8px;font-weight:700">Write path — the 3-second block</h4>
+  <p>The chain produced a block every <strong>3 seconds</strong> (65&nbsp;KB max) via DPoS. Speed came almost for free because the producer set is <em>known and scheduled</em>: ~21 witnesses (20 elected + 1 rotating "timeshare" slot) produce in a deterministic round-robin, each knowing exactly when its turn comes — no mining race, no propagation lottery.<a class="ref" href="#s20">20</a> A laggy witness just gets its slot skipped (a "missed block," a 3-second gap, not a stall) and accumulates a missed-block count that gets it voted out.</p>
+  <div class="curve">
+    <div class="step"><div class="v">3 s</div><div class="when">block time</div><div class="what">Inclusion latency. Optimistic UI showed your post/vote the instant it landed.</div></div>
+    <div class="step"><div class="v">~45–60 s</div><div class="when">irreversibility</div><div class="what">A block is final once <strong>16 of 21</strong> witnesses (75%) build on it — the "last irreversible block."<a class="ref" href="#s20">20</a></div></div>
+    <div class="step"><div class="v">felt: 3 s</div><div class="when">perceived</div><div class="what">Only transfers/payouts waited for finality; the feed didn't, so it felt instant.</div></div>
+  </div>
+
+  <h4 style="font-family:var(--sans);font-size:17px;margin:26px 0 8px;font-weight:700">Read path — the part most people miss</h4>
+  <p>Fast blocks don't give you a fast <em>feed</em>. Loading a trending page or a comment thread is a <em>query</em>, and you can't serve social reads by scanning a blockchain. Steem's unsung hero was an off-chain indexing stack:</p>
+  <table class="tbl">
+    <thead><tr><th>Layer</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td>Hivemind</td><td>The "second-layer" social indexer. Ingests chain operations into a <strong>PostgreSQL</strong> database and serves feeds, threads, follows, communities and trending — reads hit Postgres, not the chain.<a class="ref" href="#s21">21</a></td></tr>
+      <tr><td>Jussi</td><td>Steemit's custom reverse-proxy &amp; <strong>caching layer</strong>, routing each request to the right backend (<code>steemd</code> vs Hivemind) and caching responses so repeat reads never touch the DB.<a class="ref" href="#s22">22</a></td></tr>
+      <tr><td>Condenser</td><td>The <code>steemit.com</code> front-end, talking to the cached API — so it behaved like a normal web app.</td></tr>
+    </tbody>
+  </table>
+  <p>So the real model was: <strong>writes go through the 3-second chain; reads are served from a cached Postgres index.</strong> That split is exactly what let it feel like Web2 instead of a block explorer.</p>
+
+  <blockquote>
+    Low latency and the single-point-of-dependency were the <em>same decision</em>, viewed from two angles.
+    <cite>Hivemind, Jussi and the public API nodes were heavy to run, so most dApps used Steemit Inc's. The snappy UX and the centralization came from the same place.</cite>
+  </blockquote>
+  <p>This is the cleanest rebuttal to "just put social media on a blockchain." Steem proved the <em>writes</em> can be fast and feeless — but the moment a feed has to load quickly, you're back to a Postgres database and a CDN. Web2 infrastructure, wearing a blockchain underneath.</p>
+</section>
+
 <!-- ============ WHAT WORKED ============ -->
 <section id="worked">
-  <span class="sec-num">SECTION 3</span>
+  <span class="sec-num">SECTION 4</span>
   <h2>What genuinely worked</h2>
   <p class="lead">A post-mortem that only catalogs failure misreads the thing. Steem was a real and influential experiment, and several of its bets paid off — or at least proved the concept was buildable.</p>
   <div class="grid">
@@ -326,7 +384,7 @@
 
 <!-- ============ FAILURE MODES ============ -->
 <section id="failed">
-  <span class="sec-num">SECTION 4</span>
+  <span class="sec-num">SECTION 5</span>
   <h2>Failure modes</h2>
   <p class="lead">Every failure below is downstream of one decision: votes are weighted by money, and money buys a share of a fixed reward pool. That turns "curation" into "yield farming," and the rest follows mechanically.</p>
 
@@ -356,7 +414,7 @@
 
 <!-- ============ THE CRISIS ============ -->
 <section id="crisis">
-  <span class="sec-num">SECTION 5 · GOVERNANCE</span>
+  <span class="sec-num">SECTION 6 · GOVERNANCE</span>
   <h2>The takeover that broke it open</h2>
   <p class="lead">All of the above was slow decay. What made Steem the textbook case in crypto governance was a fast, public, and almost theatrical demonstration that stake-weighted voting can be bought outright.</p>
 
@@ -376,7 +434,7 @@
 
 <!-- ============ AFTERMATH ============ -->
 <section id="aftermath">
-  <span class="sec-num">SECTION 6</span>
+  <span class="sec-num">SECTION 7</span>
   <h2>Aftermath &amp; verdict</h2>
   <p>The March 2020 fork cleaved the world in two. <strong>Hive</strong> inherited the active community, most of the dApps (Splinterlands migrated, DTube went multi-chain), and the moral high ground. <strong>Steem</strong> retained Justin Sun, the Steemit brand, and a chain the original community had largely abandoned. Both still exist.</p>
   <div class="note"><b>Current-state caveat:</b> the research did not pull verified 2026 figures for relative activity, token values, or surviving-dApp metrics on Hive vs Steem. Treat the "who's winning now" question as open — the verified record runs solidly through the 2020 split, not past it.</div>
@@ -386,7 +444,7 @@
 
 <!-- ============ LESSONS ============ -->
 <section id="lessons">
-  <span class="sec-num">SECTION 7</span>
+  <span class="sec-num">SECTION 8</span>
   <h2>Transferable lessons</h2>
   <p class="lead">The reason this post-mortem is worth writing in 2026: every one of these failure modes recurs in points programs, creator rev-shares, social tokens, and DAO governance. Steem ran the experiment in public so the rest of us don't have to.</p>
 
@@ -466,6 +524,11 @@
     <li id="s17"><a href="https://iq.wiki/wiki/splinterlands">IQ.wiki — Splinterlands (Steem Monsters) overview</a><span class="qual secondary">reference</span></li>
     <li id="s18"><a href="https://dappradar.com/blog/dtube-video-social-dapp-hive-steem-avalon">DappRadar — DTube on Steem/Hive</a><span class="qual secondary">reference</span></li>
     <li id="s19"><a href="https://www.mdpi.com/2071-1050/11/1/167/pdf">Kim &amp; Chung, Sustainability 2019 — 8-step token-economy design framework (Steemit case)</a><span class="qual academic">peer-reviewed</span></li>
+    <li id="s20"><a href="https://steemit.com/dpos/@dantheman/dpos-consensus-algorithm-this-missing-white-paper">Larimer — "DPOS Consensus Algorithm: The Missing White Paper" (3s blocks, witness schedule, irreversibility)</a><span class="qual primary">primary</span></li>
+    <li id="s21"><a href="https://steemit.com/hivemind/@steemitblog/hivemind-is-live">Steemit Inc — "Hivemind is Live" (Postgres social indexer)</a> · <a href="https://github.com/steemit/hivemind">github.com/steemit/hivemind</a><span class="qual primary">primary</span></li>
+    <li id="s22"><a href="https://developers.steem.io/services/jussi">Steem Developer Portal — Jussi (reverse-proxy &amp; caching layer)</a><span class="qual primary">primary</span></li>
+    <li id="s23"><a href="https://github.com/steemit/steem/wiki/RC-Bandwidth-System">Steem wiki — RC / Bandwidth System (HF20 "Velocity," Resource Credits)</a><span class="qual primary">primary</span></li>
+    <li id="s24"><a href="https://steemit.com/question/@tommyeconomics/where-is-all-of-steemit-s-content-stored-not-on-the-blockchain-i-don-t-think">"Where is all of Steemit's content stored?" — on-chain text vs off-chain images (steemitimages.com)</a><span class="qual secondary">community</span></li>
   </ol>
 </section>
 
